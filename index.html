@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
@@ -18,6 +18,7 @@
             padding: 8px;
             background-color: #f5f5f5;
             font-size: 12px;
+            position: relative; /* 为改密入口定位 */
         }
 
         .container {
@@ -28,6 +29,32 @@
             padding: 10px;
             border-radius: 6px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-top: 60px; /* 给改密入口留出空间 */
+        }
+
+        /* 更改密码入口样式 */
+        .user-actions {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            color: #666;
+        }
+
+        .user-actions a {
+            color: #3498db;
+            text-decoration: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .user-actions a:hover {
+            background: #e3f2fd;
+            text-decoration: underline;
         }
 
         .header {
@@ -311,6 +338,11 @@
                 box-shadow: none;
                 padding: 0;
                 width: 100%;
+                margin-top: 0;
+            }
+            /* 隐藏改密入口 */
+            .user-actions {
+                display: none;
             }
             /* 表格取消最大宽度，100%自适应打印页面，全月列完整显示 */
             table {
@@ -385,6 +417,13 @@
             .labour-target-panel {
                 min-width: 100%;
             }
+            /* 小屏幕改密入口换行 */
+            .user-actions {
+                flex-wrap: wrap;
+                top: 5px;
+                right: 5px;
+                gap: 5px;
+            }
         }
     </style>
 
@@ -401,13 +440,21 @@
     </script>
 </head>
 <body>
+    <!-- 更改密码/登出入口 -->
+    <div class="user-actions" id="userActions">
+        <span id="actionUserInfo">登錄者：未登錄</span>
+        <a href="change-password.html" id="changePwdLink">更改密碼</a>
+        <a href="javascript:void(0);" id="logoutLink">退出</a>
+    </div>
+
     <div class="container">
-        <!-- 页头：增加登录者信息显示 -->
+        <!-- 页头：登录者信息（保留原样式） -->
         <div class="header">
             <h1 id="titleRoster">員工排班系統</h1>
             <div style="display: flex; align-items: center;">
                 <div class="user-info" id="userInfo">登錄者：ID/姓名</div>
                 <button id="langToggle">EN / 中文</button>
+                <!-- 原退出按钮保留，也可删除，统一用右上角入口 -->
                 <button id="logoutBtn">退出</button>
             </div>
         </div>
@@ -512,7 +559,9 @@ PH = 5
                 clear: "Clear",
                 labourTarget: "Labour Target",
                 save: "Save",
-                userInfo: "User："
+                userInfo: "User：",
+                changePwd: "Change Password",
+                logout: "Logout"
             },
             zh: {
                 rosterTitle: "員工排班系統",
@@ -534,7 +583,9 @@ PH = 5
                 clear: "清除",
                 labourTarget: "勞工目標",
                 save: "保存",
-                userInfo: "登錄者："
+                userInfo: "登錄者：",
+                changePwd: "更改密碼",
+                logout: "退出"
             }
         };
 
@@ -542,6 +593,75 @@ PH = 5
            全局变量：年份相关
         ============================ */
         let currentYear = new Date().getFullYear(); // 当前年份
+
+        /* ============================
+           页面初始化：检查登录状态
+        ============================ */
+        document.addEventListener("DOMContentLoaded", () => {
+            // 检查是否登录
+            const currentUser = localStorage.getItem("currentUser");
+            if (!currentUser) {
+                alert("請先登入系統！");
+                window.location.href = "login.html";
+                return;
+            }
+
+            // 初始化改密/登出入口显示
+            updateUserActionDisplay();
+
+            // 初始化其他功能
+            if (typeof window.supabase !== 'object' || typeof window.supabase.from !== 'function') {
+                alert("系統初始化失敗，請刷新頁面");
+                return;
+            }
+            
+            // 初始化年份选择框
+            initYearSelect();
+            
+            loadShiftCodes(); // 页面加载时立即加载更期代号
+            const monthSelect = document.getElementById("monthSelect");
+            LANG.zh.months.forEach(m => {
+                const opt = document.createElement("option");
+                opt.textContent = m;
+                monthSelect.appendChild(opt);
+            });
+            monthSelect.value = LANG.zh.months[new Date().getMonth()];
+            
+            // 更新登录者信息显示
+            updateUserInfoDisplay();
+            
+            applyLanguage();
+            loadRoster();
+
+            // 绑定登出事件
+            document.getElementById("logoutLink").addEventListener("click", logout);
+            document.getElementById("logoutBtn").addEventListener("click", logout);
+        });
+
+        /* ============================
+           登出功能
+        ============================ */
+        function logout() {
+            if (confirm("確定要退出系統嗎？")) {
+                localStorage.removeItem("currentUser");
+                window.location.href = "login.html";
+            }
+        }
+
+        /* ============================
+           更新改密入口显示
+        ============================ */
+        function updateUserActionDisplay() {
+            const currentUser = localStorage.getItem("currentUser") || "未登錄";
+            const L = LANG[currentLang];
+            
+            // 更新入口处的用户信息
+            document.getElementById("actionUserInfo").textContent = `${L.userInfo}${currentUser}`;
+            // 更新改密链接文字
+            document.getElementById("changePwdLink").textContent = L.changePwd;
+            // 更新登出链接文字
+            document.getElementById("logoutLink").textContent = L.logout;
+        }
 
         /* ============================
            语言切换
@@ -567,6 +687,8 @@ PH = 5
             
             // 更新登录者信息文本
             updateUserInfoDisplay();
+            // 更新改密入口文本
+            updateUserActionDisplay();
             
             // 更新月份下拉框
             const monthSelect = document.getElementById("monthSelect");
@@ -1059,40 +1181,6 @@ PH = 5
 
         document.getElementById("printBtn").addEventListener("click", () => { window.print(); });
         document.getElementById("monthSelect").addEventListener("change", () => { buildCalendar(); loadRoster(); });
-        document.getElementById("logoutBtn").onclick = () => { 
-            localStorage.removeItem("currentUser"); 
-            location.href = "login.html"; 
-        };
-
-        /* ============================
-           初始化
-        ============================ */
-        document.addEventListener("DOMContentLoaded", () => {
-            if (typeof window.supabase !== 'object' || typeof window.supabase.from !== 'function') {
-                alert("系統初始化失敗，請刷新頁面");
-                return;
-            }
-            
-            // 初始化年份选择框
-            initYearSelect();
-            
-            loadShiftCodes(); // 页面加载时立即加载更期代号
-            const monthSelect = document.getElementById("monthSelect");
-            LANG.zh.months.forEach(m => {
-                const opt = document.createElement("option");
-                opt.textContent = m;
-                monthSelect.appendChild(opt);
-            });
-            monthSelect.value = LANG.zh.months[new Date().getMonth()];
-            
-            if (!localStorage.getItem("currentUser")) localStorage.setItem("currentUser", "scd");
-            
-            // 更新登录者信息显示
-            updateUserInfoDisplay();
-            
-            applyLanguage();
-            loadRoster();
-        });
     </script>
 </body>
 </html>
